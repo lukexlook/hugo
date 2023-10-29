@@ -15,9 +15,11 @@ package transform
 
 import (
 	"context"
+	"strings"
 
 	"github.com/gohugoio/hugo/deps"
 	"github.com/gohugoio/hugo/tpl/internal"
+	"github.com/spf13/cast"
 )
 
 const name = "transform"
@@ -112,8 +114,29 @@ func init() {
 			},
 		)
 
+		{
+			cf := &customFunctions{}
+			ns.AddMethodMapping(cf.CustomLower,
+				[]string{"customLower"},
+				[][2]string{
+					{`{{ "Hello, world!" | lower }}`, "hello, world!"},
+				},
+			)
+		}
+
 		return ns
 	}
 
 	internal.AddTemplateFuncsNamespace(f)
+}
+
+type customFunctions struct{}
+
+func (cf *customFunctions) CustomLower(s any) (string, error) {
+	ss, err := cast.ToStringE(s)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.ToLower(ss), nil
 }
