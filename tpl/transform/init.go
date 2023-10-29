@@ -15,11 +15,13 @@ package transform
 
 import (
 	"context"
-	"strings"
+	"go/build"
+	"log"
+	"os"
+	"plugin"
 
 	"github.com/gohugoio/hugo/deps"
 	"github.com/gohugoio/hugo/tpl/internal"
-	"github.com/spf13/cast"
 )
 
 const name = "transform"
@@ -114,29 +116,38 @@ func init() {
 			},
 		)
 
-		{
-			cf := &customFunctions{}
-			ns.AddMethodMapping(cf.CustomLower,
-				[]string{"customLower"},
-				[][2]string{
-					{`{{ "Hello, world!" | lower }}`, "hello, world!"},
-				},
-			)
-		}
+		func() {
+			gopath := os.Getenv("GOPATH")
+			if gopath == "" {
+				gopath = build.Default.GOPATH
+			}
+
+			p, err := plugin.Open(gopath + "/bin/hugo.so")
+			if err != nil {
+				log.Printf("[plugins] cannot open hugo.so: %v", err)
+				return
+			}
+
+			range_, err := p.Lookup("Range")
+			if err != nil {
+				log.Printf("[plugins] cannot lookup Range: %v", err)
+				return
+			}
+
+			rangeFunc, ok := range_.(func(func(m any, aliases []string, examples [][2]string)))
+			if !ok {
+				log.Println("[plugins] cannot coerce Range")
+				return
+			}
+
+			rangeFunc(func(m any, aliases []string, examples [][2]string) {
+				ns.AddMethodMapping(m, aliases, examples)
+				log.Printf("[plugins] loaded %v", aliases)
+			})
+		}()
 
 		return ns
 	}
 
 	internal.AddTemplateFuncsNamespace(f)
-}
-
-type customFunctions struct{}
-
-func (cf *customFunctions) CustomLower(s any) (string, error) {
-	ss, err := cast.ToStringE(s)
-	if err != nil {
-		return "", err
-	}
-
-	return strings.ToLower(ss), nil
 }
